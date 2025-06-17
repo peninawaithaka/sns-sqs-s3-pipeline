@@ -1,0 +1,7 @@
+{
+    "user_id": "abc123",
+    "event": "purchase",
+    "amount": 59.99,
+    "timestamp": "2025-06-17T10:00:00Z"
+  }
+  
