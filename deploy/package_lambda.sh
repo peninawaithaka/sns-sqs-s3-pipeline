@@ -1,5 +1,6 @@
 #!/bin/bash
 
+cd ..
 cd lambda
 zip ../deploy/function.zip lambda_function.py
 cd ..

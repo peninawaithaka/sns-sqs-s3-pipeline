@@ -22,3 +22,4 @@ response = sns.publish(
 )
 
 print(f"SNS Response", response)
+
