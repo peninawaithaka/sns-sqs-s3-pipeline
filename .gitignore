@@ -1,2 +1,4 @@
 *.zip
 deploy/function.zip
+events/__pycache__
+events/.env
