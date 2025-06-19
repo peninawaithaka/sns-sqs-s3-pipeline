@@ -12,10 +12,10 @@ fi
 
 
 # # --- CREATE RESOURCES ---
-# echo "\n=== Creating S3 bucket ==="
-# aws s3api create-bucket \
-#   --bucket $BUCKET_NAME \
-#   --region $REGION || true #if bucket exists, step is skipped
+echo "\n=== Creating S3 bucket ==="
+aws s3api create-bucket \
+  --bucket $BUCKET_NAME \
+  --region $REGION || true #if bucket exists, step is skipped
 
 echo "\n=== Creating SQS queue ==="
 QUEUE_URL=$(aws sqs create-queue --queue-name $QUEUE_NAME --query 'QueueUrl' --output text)
@@ -28,35 +28,32 @@ echo "\n=== Creating SNS topic ==="
 TOPIC_ARN=$(aws sns create-topic --name $TOPIC_NAME --query 'TopicArn' --output text)
 echo "SNS Topic ARN: $TOPIC_ARN"
 
-# echo "\n=== Creating Lambda function ==="
-# aws lambda create-function \
-#   --function-name $LAMBDA_NAME \
-#   --runtime python3.11 \
-#   --role $LAMBDA_ROLE_ARN \
-#   --handler lambda_function.lambda_handler \
-#   --zip-file fileb://$ZIP_PATH \
-#   --environment "Variables={BUCKET_NAME=$BUCKET_NAME}" \
-#   --region $REGION || echo "Lambda function exists"
+echo "\n=== Creating Lambda function ==="
+aws lambda create-function \
+  --function-name $LAMBDA_NAME \
+  --runtime python3.11 \
+  --role $LAMBDA_ROLE_ARN \
+  --handler lambda_function.lambda_handler \
+  --zip-file fileb://$ZIP_PATH \
+  --environment "Variables={BUCKET_NAME=$BUCKET_NAME}" \
+  --region $REGION || echo "Lambda function exists"
 
-# echo "\n=== Subscribing SQS to SNS ==="
-# aws sns subscribe \
-#   --topic-arn $TOPIC_ARN \
-#   --protocol sqs \
-#   --notification-endpoint $QUEUE_ARN
+echo "\n=== Subscribing SQS to SNS ==="
+aws sns subscribe \
+  --topic-arn $TOPIC_ARN \
+  --protocol sqs \
+  --notification-endpoint $QUEUE_ARN
 
-# echo "=== Linking SQS to Lambda ==="
-# aws lambda create-event-source-mapping \
-#   --function-name $LAMBDA_NAME \
-#   --event-source-arn $QUEUE_ARN \
-#   --batch-size 5 \
-#   --enabled
-
+echo "=== Linking SQS to Lambda ==="
+aws lambda create-event-source-mapping \
+  --function-name $LAMBDA_NAME \
+  --event-source-arn $QUEUE_ARN \
+  --batch-size 5 \
+  --enabled
 
 echo -e "\n=== Allowing SNS to send to SQS ==="
 
-# Build the raw JSON policy
-POLICY_JSON=$(cat <<EOF
-{
+ESCAPED_POLICY='{
   "Version": "2012-10-17",
   "Statement": [
     {
@@ -64,26 +61,22 @@ POLICY_JSON=$(cat <<EOF
       "Effect": "Allow",
       "Principal": "*",
       "Action": "SQS:SendMessage",
-      "Resource": "$QUEUE_ARN",
+      "Resource": "'"$QUEUE_ARN"'",
       "Condition": {
         "ArnEquals": {
-          "aws:SourceArn": "$TOPIC_ARN"
+          "aws:SourceArn": "'"$TOPIC_ARN"'"
         }
       }
     }
   ]
-}
-EOF
-)
+}'
 
-# ✅ Compact and escape the JSON using jq (must be installed)
-ESCAPED_POLICY=$(echo "$POLICY_JSON" | jq -c '.')
+POLICY_STRING=$(echo "$ESCAPED_POLICY" | tr -d '\n' | sed 's/"/\\"/g') # Compress and escape the string in-line
 
-# ✅ Apply the policy safely
+
 aws sqs set-queue-attributes \
   --queue-url "$QUEUE_URL" \
-  --attributes "Policy=$ESCAPED_POLICY"
-
+  --attributes "Policy=\"$POLICY_STRING\""
 
 
 #--- DESTROY RESOURCES ---
@@ -95,7 +88,7 @@ aws sqs set-queue-attributes \
 # aws sns delete-topic --topic-arn $TOPIC_ARN
 
 # echo "Deleting SQS queue..."
-# aws sqs delete-queue --queue-url https://sqs.us-east-1.amazonaws.com/440744229926/event-queue
+# aws sqs delete-queue --queue-url <QUEUE_URL>
 
 # echo "Deleting S3 bucket and all contents..."
 # aws s3 rm s3://$BUCKET_NAME --recursive
